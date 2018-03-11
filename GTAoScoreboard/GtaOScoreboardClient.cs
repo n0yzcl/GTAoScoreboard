@@ -41,6 +41,8 @@ namespace GTAoScoreboard
         private List<string> header = new List<string>();
         public delegate void addColumn(string ColumnName, List<dynamic> value);
         public delegate void editColumn(string ColumnName, List<dynamic> value);
+        public delegate void editCell(string ColumnName, string id, string value);
+
 
         private GtaOScoreboardData values;
         /// <summary>
@@ -50,10 +52,13 @@ namespace GTAoScoreboard
         {
             addColumn ADDCOLUMN = new addColumn(AddColumn);
             editColumn EDITCOLUMN = new editColumn(EditColumn);
+            editCell EDITCELL = new editCell(EditCell);
+
             GetConfig();
             Initialize();
             Tick += OnTick;
             Exports.Add("AddColumn", ADDCOLUMN);
+            Exports.Add("EditCell", EDITCELL);
             Exports.Add("EditColumn", EDITCOLUMN);
         }
         private void AddColumn(string ColumnName, List<dynamic> value)
@@ -79,6 +84,15 @@ namespace GTAoScoreboard
             templist.Reverse();
             var indextochange = templist.FindIndex(a => a == ColumnName);
             values.values[indextochange] = convertedvalues;
+            templist.Reverse();
+        }
+        private void EditCell(string ColumnName, string id, string value)
+        {
+            var templist = header;
+            templist.Reverse();
+            var indextochange = templist.FindIndex(a => a == ColumnName);
+            var indextochange2 = values.values[1].FindIndex(a => a == id);
+            values.values[indextochange][indextochange2] = value;
             templist.Reverse();
         }
         private void Initialize()
