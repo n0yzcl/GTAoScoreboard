@@ -8,6 +8,19 @@ using static CitizenFX.Core.Native.API;
 
 namespace GTAoScoreboard
 {
+    public class GtaOScoreboardData
+    {
+        public List<List<string>> values = new List<List<string>>();
+
+        public GtaOScoreboardData(List<string> valuestoadd)
+        {
+            values.Insert(0, valuestoadd);
+        }
+        public void AddData(List<string> data)
+        {
+            values.Add(data);
+        }
+    }
     public class GtaOScoreboardClient : BaseScript
     {
 
@@ -25,16 +38,76 @@ namespace GTAoScoreboard
         private DisplayType displayType = DisplayType.LEFT;
         private CurrentPage currPage = CurrentPage.HIDDEN;
         private int timer = 0;
+        private List<string> header = new List<string>();
+        public delegate void addColumn(string ColumnName, List<dynamic> value);
+        public delegate void editColumn(string ColumnName, List<dynamic> value);
 
+        private GtaOScoreboardData values;
         /// <summary>
         /// Constructor
         /// </summary>
         public GtaOScoreboardClient()
         {
+            addColumn ADDCOLUMN = new addColumn(AddColumn);
+            editColumn EDITCOLUMN = new editColumn(EditColumn);
             GetConfig();
+            Initialize();
             Tick += OnTick;
+            Exports.Add("AddColumn", ADDCOLUMN);
+            Exports.Add("EditColumn", EDITCOLUMN);
         }
+        private void AddColumn(string ColumnName, List<dynamic> value)
+        {
+            Debug.WriteLine("this got called.");
+            var convertedvalues = new List<string>();
+            foreach (var val in value)
+            {
+                convertedvalues.Add(val);
+            }
+            header.Insert(0,ColumnName);
+            values.AddData(convertedvalues);
+        }
+        private void EditColumn(string ColumnName, List<dynamic> value)
+        {
+            Debug.WriteLine("this got called.");
+            var convertedvalues = new List<string>();
+            foreach (var val in value)
+            {
+                convertedvalues.Add(val);
+            }
+            var templist = header;
+            templist.Reverse();
+            var indextochange = templist.FindIndex(a => a == ColumnName);
+            values.values[indextochange] = convertedvalues;
+            templist.Reverse();
+        }
+        private void Initialize()
+        {
+            header.Insert(0, "~|~Players Online ( " + NetworkGetNumConnectedPlayers() + " )");
+            header.Insert(0, "Server ID");
 
+            List<string> names = new List<string>();
+            List<string> ids = new List<string>();
+
+            for (var i = 0; i < 32; i++)
+            {
+                // If the player exists...
+                if (NetworkIsPlayerActive(i))
+                {
+                    // Get the player's info.
+                    var name = GetPlayerName(i);
+                    var serverId = GetPlayerServerId(i).ToString();
+                    ids.Add(serverId);
+                    names.Add(name);
+
+                }
+            }
+
+            values = new GtaOScoreboardData(names);
+            values.AddData(ids);
+
+
+        }
         private async Task GetConfig()
         {
             await Delay(500);
@@ -124,10 +197,8 @@ namespace GTAoScoreboard
         {
             // If this gets called, then at least one scoreboard should be visible,
             // so always draw the header.
-            string headerText = "~|~Players Online ( " + NetworkGetNumConnectedPlayers() + " )";
-            string headerSecondaryText = "Server ID";
-            DrawRow(headerText, headerSecondaryText, size: 0.35f, font: 0);
-
+            DrawRow(header, size: 0.35f, font: 0);
+            var serverId = GetPlayerServerId(PlayerId());
             // Loop through all players.
             var scoreboardIndex = 0;
             for (var i = 0; i < 32; i++)
@@ -136,9 +207,12 @@ namespace GTAoScoreboard
                 if (NetworkIsPlayerActive(i))
                 {
                     // Get the player's info.
-                    var name = GetPlayerName(i);
-                    var serverId = GetPlayerServerId(i);
-
+                    var row = new List<string>();
+                    foreach (var value in values.values)
+                    {
+                        row.Add(value[i]);
+                    }
+                    row.Reverse();
                     // Again, this is unused and needs some work before it is actually useful.
                     //var wantedLevel = GetPlayerWantedLevel(i);
                     var wantedLevel = 0;
@@ -148,17 +222,17 @@ namespace GTAoScoreboard
                     {
                         if (i == PlayerId())
                         {
-                            DrawRow(name, serverId.ToString(), 0.04f * (scoreboardIndex + 1), r: 75, g: 150, b: 225, stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
+                            DrawRow(row, 0.04f * (scoreboardIndex + 1), r: 75, g: 150, b: 225, stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
                         }
                         else
                         {
-                            DrawRow(name, serverId.ToString(), 0.04f * (scoreboardIndex + 1), stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
+                            DrawRow(row, 0.04f * (scoreboardIndex + 1), stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
                         }
                     }
                     // If the second page should be displayed, then do this:
                     else if (scoreboardIndex > 15 && page == CurrentPage.SECOND)
                     {
-                        DrawRow(name, serverId.ToString(), 0.04f * (scoreboardIndex - 15), stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
+                        DrawRow(row, 0.04f * (scoreboardIndex - 15), stars: wantedLevel, bgColor: (serverId % 2 == 0) ? 15 : 20);
                     }
 
                     // Player is valid, so increment scoreboardIndex by 1
@@ -181,13 +255,13 @@ namespace GTAoScoreboard
         /// <param name="bgColor">The background shade (value used for red, green and blue).</param>
         /// <param name="size">The text font size.</param>
         /// <param name="font">The text font id.</param>
-        private void DrawRow(string leftText, string rightText, float starty = 0.0f, int r = 255, int g = 255, int b = 255, int stars = 0, int bgColor = 2, float size = 0.45f, int font = 6)
+        private void DrawRow(List<string> text, float starty = 0.0f, int r = 255, int g = 255, int b = 255, int stars = 0, int bgColor = 2, float size = 0.45f, int font = 6)
         {
             // Constants.
             const int alpha = 200;
 
             // Variables.
-            float width = 0.2f;
+            float width = 0.1f * text.Count();
             float height = 0.04f;
             float safeZoneOffset = (GetSafeZoneSize() / 2.5f) - 0.4f;
             float y = starty + (height / 2) - safeZoneOffset;
@@ -212,9 +286,19 @@ namespace GTAoScoreboard
                 x = 1.0f - (width / 2) + safeZoneOffset;
             }
             DrawRect(x, y, width, height, red, green, blue, alpha);
+            var idx = 0.0f;
 
-            DrawText(leftText, x - (width / 2) + 0.005f, y - (height / 2) + 0.005f, x + width, 1, r, g, b, size: size, font: font);
-            DrawText(rightText, x - (width / 2), y - (height / 2) + 0.005f, x + (width / 2) - 0.005f, 2, r, g, b, size: size, font: font);
+            if (text.Count() > 2)
+            {
+                idx = -0.5f * (text.Count() - 2);
+            }
+
+            foreach (var txt in text)
+            {
+                DrawText(txt, x - (width / text.Count) * idx + 0.005f, y - (height / 2) + 0.005f, x + width, 1, r, g, b, size: size, font: font);
+
+                idx++;
+            }
         }
 
         /// <summary>
